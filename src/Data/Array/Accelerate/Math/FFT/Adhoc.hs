@@ -90,14 +90,13 @@ ditSplitRadixLoop mode arr =
 
       twiddle len4 k =
         generate (index1 len4) (twiddleSR len4 k . indexHead)
-
       step (unlift -> (us,zs)) =
         let
             k           = indexHead (shape zs)
             tw1         = twiddle k 1
             tw3         = twiddle k 3
             --
-            im          = lift (0 :+ signOfMode mode)
+            im          = undefined --constant (0 :+ signOfMode mode)
             twidZeven   = zipWithExtrude1 (*) tw1 (sieveV 2 0 zs)
             twidZodd    = zipWithExtrude1 (*) tw3 (sieveV 2 1 zs)
             zsum        = zipWith (+) twidZeven twidZodd
@@ -116,11 +115,11 @@ ditSplitRadixLoop mode arr =
             odds  = sieve 2 1 xs
         in
         lift (evens ++^ ys, twist 2 odds)
-
+      initial :: Acc (Array (sh :. Int :. Int) (Complex e), Array (sh :. Int :. Int) (Complex e)) 
       initial =
         let sh :. n = unlift (shape arr) :: Exp sh :. Exp Int
-        in  lift ( reshape (lift (sh :. 1 :. n)) arr
-                 , fill    (lift (sh :. 0 :. n `quot` 2)) 0
+        in  lift ( reshape (lift (sh :. (1::Int) :. n)) arr
+                 , fill    (lift (sh :. (0::Int) :. n `quot` 2)) 0
                  )
   in
   headV
@@ -143,7 +142,7 @@ dit235
     -> Acc (Array (sh:.Int) (Complex e))
 dit235 mode arr =
   let
-      merge :: forall sh' a. (Shape sh', Elt a)
+      merge :: forall sh' a. (Shape sh', Slice sh', Elt a)
             => Acc (Array (sh':.Int:.Int) a)
             -> Acc (Array (sh':.Int) a)
       merge xs =
@@ -171,7 +170,7 @@ dit235 mode arr =
       initial :: Acc (Array (sh:.Int:.Int) (Complex e), Vector Int)
       initial =
         let sh :. n = unlift (shape arr) :: Exp sh :. Exp Int
-        in  lift ( reshape (lift (sh :. 1 :. n)) arr
+        in  lift ( reshape (lift (sh :. (1::Int) :. n)) arr
                  , fill (index1 0) 0
                  )
 
@@ -194,16 +193,26 @@ dit235 mode arr =
       cache3 :: Exp (Complex e, Complex e)
       cache3 =
         let sqrt3d2 = sqrt 3 / 2
-            mhalf   = -1/2
+            mhalf   = makeExp (-1) / makeExp 2 :: Exp e-- lift (-1/2) :: Exp e
             s       = signOfMode mode
             u       = s * sqrt3d2
         in
-        lift (mhalf :+ u, mhalf :+ (-u))
+        lift ((mhalf :+ u, mhalf :+ (-u)))
 
       cache4 :: Exp (Complex e, Complex e, Complex e)
       cache4 =
-        let s = signOfMode mode
-        in  lift (0 :+ s, (-1) :+ (-0), 0 :+ (-s))
+        let s = signOfMode mode :: Exp e
+            
+            --t1 = constant ((-1) :: e) :: Exp e
+            t1 = makeExp (-1) :: Exp e
+            t2 = makeExp 0 :: Exp e
+
+            r1 = lift (t2 :+ s) :: Exp (Complex e)
+            r2 = lift (t1 :+ t2) :: Exp (Complex e)
+            r3 = lift (t2 :+ (-s)) :: Exp (Complex e)
+        in lift (r1, r2, r3)
+        --in lift (constant 0 :+ s, constant ((-1) :+ (-0)), constant 0 :+ (-s))
+        --in lift (0 :+ s, (-1) :+ (-0), 0 :+ (-s))
 
       cache5 :: Exp (Complex e, Complex e, Complex e, Complex e)
       cache5 =
@@ -319,9 +328,9 @@ pow x k
   = snd
   $ while (\ip -> fst ip < k)
           (\ip -> lift (fst ip + 1, snd ip * x))
-          (lift (0,1))
+          (lift (0::Int,1::Int))
 
-pad :: (Shape sh, Elt e)
+pad :: (Shape sh, Slice sh, Elt e)
     => Exp Int
     -> Exp e
     -> Acc (Array (sh:.Int) e)
@@ -332,40 +341,41 @@ pad n x xs =
   in
   xs ++ fill sh x
 
-cons :: forall sh e. (Shape sh, Elt e)
+cons :: forall sh e. (Shape sh, Slice sh, Elt e)
      => Acc (Array sh e)
      -> Acc (Array (sh:.Int) e)
      -> Acc (Array (sh:.Int) e)
 cons x xs =
-  let x' = reshape (lift (shape x :. 1)) x
+  let x' = reshape (lift (shape x :. (1::Int))) x
   in  x' ++ xs
 
-consV :: forall sh e. (Shape sh, Elt e)
+consV :: forall sh e. (Shape sh, Slice sh, Elt e)
       => Acc (Array (sh:.Int) e)
       -> Acc (Array (sh:.Int:.Int) e)
       -> Acc (Array (sh:.Int:.Int) e)
 consV x xs =
   let sh :. n = unlift (shape x) :: Exp sh :. Exp Int
-  in  reshape (lift (sh :. 1 :. n)) x ++^ xs
+      newsh = lift (sh :. (1::Int) :. n) :: Exp (sh :. Int :. Int)
+  in  reshape newsh x ++^ xs
 
-headV :: (Shape sh, Elt e)
+headV :: (Shape sh, Slice sh, Elt e)
       => Acc (Array (sh:.Int:.Int) e)
       -> Acc (Array (sh:.Int) e)
 headV xs = slice xs (lift (Any :. (0 :: Exp Int) :. All))
 
-tailV :: forall sh e. (Shape sh, Elt e)
+tailV :: forall sh e. (Shape sh, Slice sh, Elt e)
       => Acc (Array (sh:.Int:.Int) e)
       -> Acc (Array (sh:.Int:.Int) e)
 tailV = tailOn _2
 
-dropV :: forall sh e. (Shape sh, Elt e)
+dropV :: forall sh e. (Shape sh, Slice sh, Elt e)
       => Exp Int
       -> Acc (Array (sh:.Int:.Int) e)
       -> Acc (Array (sh:.Int:.Int) e)
 dropV = dropOn _2
 
 sieve
-    :: forall sh e. (Shape sh, Elt e)
+    :: forall sh e. (Shape sh, Slice sh, Elt e)
     => Exp Int
     -> Exp Int
     -> Acc (Array (sh:.Int) e)
@@ -379,7 +389,7 @@ sieve fac start xs =
     xs
 
 sieveV
-    :: forall sh e. (Shape sh, Elt e)
+    :: forall sh e. (Shape sh, Slice sh, Elt e)
     => Exp Int
     -> Exp Int
     -> Acc (Array (sh:.Int:.Int) e)
@@ -392,7 +402,7 @@ sieveV fac start xs =
     (\(unlift -> ix :. j :. i :: Exp sh :. Exp Int :. Exp Int) -> lift (ix :. fac*j+start :. i))
     xs
 
-twist :: forall sh e. (Shape sh, Elt e)
+twist :: forall sh e. (Shape sh, Slice sh, Elt e)
       => Exp Int
       -> Acc (Array (sh:.Int:.Int) e)
       -> Acc (Array (sh:.Int:.Int) e)
@@ -406,7 +416,7 @@ twist fac xs =
 
 
 infixr 5 ++^
-(++^) :: forall sh e. (Shape sh, Elt e)
+(++^) :: forall sh e. (Shape sh, Slice sh, Elt e)
       => Acc (Array (sh:.Int:.Int) e)
       -> Acc (Array (sh:.Int:.Int) e)
       -> Acc (Array (sh:.Int:.Int) e)
@@ -431,39 +441,39 @@ zipWithExtrude2 f xs ys =
   zipWith f (replicate (lift (indexTail (indexTail (shape ys)) :. All :. All)) xs) ys
 
 transpose
-    :: forall sh e. (Shape sh, Elt e)
+    :: forall sh e. (Shape sh, Slice sh, Elt e)
     => Acc (Array (sh:.Int:.Int) e)
     -> Acc (Array (sh:.Int:.Int) e)
 transpose = transposeOn _1 _2
 
 transform2
-    :: (Shape sh, Num e)
+    :: (Shape sh, Slice sh, Num e)
     => Exp e
     -> Acc (Array (sh:.Int) e)
     -> Acc (Array (sh:.Int) e)
 transform2 v xs =
   generate
-    (lift (indexTail (shape xs) :. 2))
+    (lift (indexTail (shape xs) :. (2::Int)))
     (\(unlift -> ix :. k :: Exp sh :. Exp Int) ->
-        let x0 = xs ! lift (ix :. 0)
-            x1 = xs ! lift (ix :. 1)
+        let x0 = xs ! lift (ix :. (0::Int))
+            x1 = xs ! lift (ix :. (1::Int))
         in
         if k == 0 then x0+x1
                   else x0+v*x1)
 
 transform3
-    :: forall sh e. (Shape sh, Num e)
+    :: forall sh e. (Shape sh, Slice sh, Num e)
     => Exp (e,e)
     -> Acc (Array (sh:.Int) e)
     -> Acc (Array (sh:.Int) e)
 transform3 (unlift -> (z1,z2)) xs =
   generate
-    (lift (indexTail (shape xs) :. 3))
+    (lift (indexTail (shape xs) :. (3::Int)))
     (\(unlift -> ix :. k :: Exp sh :. Exp Int) ->
         let
-            x0 = xs ! lift (ix :. 0)
-            x1 = xs ! lift (ix :. 1)
-            x2 = xs ! lift (ix :. 2)
+            x0 = xs ! lift (ix :. (0::Int))
+            x1 = xs ! lift (ix :. (1::Int))
+            x2 = xs ! lift (ix :. (2::Int))
             --
             ((s,_), (zx1,zx2)) = sumAndConvolve2 (x1,x2) (z1,z2)
         in
@@ -472,19 +482,19 @@ transform3 (unlift -> (z1,z2)) xs =
         {- k == 2 -} else x0 + zx2)
 
 transform4
-    :: forall sh e. (Shape sh, Num e)
+    :: forall sh e. (Shape sh, Slice sh, Num e)
     => Exp (e,e,e)
     -> Acc (Array (sh:.Int) e)
     -> Acc (Array (sh:.Int) e)
 transform4 (unlift -> (z1,z2,z3)) xs =
   generate
-    (lift (indexTail (shape xs) :. 4))
+    (lift (indexTail (shape xs) :. (4::Int)))
     (\(unlift -> ix :. k :: Exp sh :. Exp Int) ->
         let
-            x0 = xs ! lift (ix :. 0)
-            x1 = xs ! lift (ix :. 1)
-            x2 = xs ! lift (ix :. 2)
-            x3 = xs ! lift (ix :. 3)
+            x0 = xs ! lift (ix :. (0::Int))
+            x1 = xs ! lift (ix :. (1::Int))
+            x2 = xs ! lift (ix :. (2::Int))
+            x3 = xs ! lift (ix :. (3::Int))
             --
             x02a = x0+x2
             x02b = x0+z2*x2
@@ -514,20 +524,20 @@ transform4 (unlift -> (z1,z2,z3)) xs =
 -- 0 3 1 2 4
 --
 transform5
-    :: forall sh e. (Shape sh, Num e)
+    :: forall sh e. (Shape sh, Slice sh, Num e)
     => Exp (e,e,e,e)
     -> Acc (Array (sh:.Int) e)
     -> Acc (Array (sh:.Int) e)
 transform5 (unlift -> (z1,z2,z3,z4)) xs =
   generate
-    (lift (indexTail (shape xs) :. 5))
+    (lift (indexTail (shape xs) :. (5::Int)))
     (\(unlift -> ix :. k :: Exp sh :. Exp Int) ->
         let
-            x0 = xs ! lift (ix :. 0)
-            x1 = xs ! lift (ix :. 1)
-            x2 = xs ! lift (ix :. 2)
-            x3 = xs ! lift (ix :. 3)
-            x4 = xs ! lift (ix :. 4)
+            x0 = xs ! lift (ix :. (0::Int))
+            x1 = xs ! lift (ix :. (1::Int))
+            x2 = xs ! lift (ix :. (2::Int))
+            x3 = xs ! lift (ix :. (3::Int))
+            x4 = xs ! lift (ix :. (4::Int))
             --
             ((s,_), (d1,d2,d4,d3)) = sumAndConvolve4 (x1,x3,x4,x2) (z1,z2,z4,z3)
         in
@@ -603,3 +613,5 @@ sumAndConvolve4 (a0,a1,a2,a3) (b0,b1,b2,b3) =
   in
   ((sa0123, sb0123), (d0, d1, d2, d3))
 
+makeExp :: Numeric e => Int -> Exp e
+makeExp = fromIntegral . constant
