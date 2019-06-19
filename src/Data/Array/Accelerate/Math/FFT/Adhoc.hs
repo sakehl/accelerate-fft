@@ -96,7 +96,7 @@ ditSplitRadixLoop mode arr =
             tw1         = twiddle k 1
             tw3         = twiddle k 3
             --
-            im          = undefined --constant (0 :+ signOfMode mode)
+            im          = lift (makeExp 0 :+ signOfMode mode) 
             twidZeven   = zipWithExtrude1 (*) tw1 (sieveV 2 0 zs)
             twidZodd    = zipWithExtrude1 (*) tw3 (sieveV 2 1 zs)
             zsum        = zipWith (+) twidZeven twidZodd
