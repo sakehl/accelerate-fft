@@ -33,6 +33,8 @@ module Data.Array.Accelerate.Math.FFT (
   fft2D,
   fft3D,
 
+  Adhoc.ditSplitRadixLoop,
+
 ) where
 
 import Data.Array.Accelerate                                        as A
