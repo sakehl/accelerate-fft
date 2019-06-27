@@ -21,7 +21,7 @@
 -- package contains other more sophisticated algorithms as well.
 --
 
-module Data.Array.Accelerate.Math.FFT.Adhoc ( fft )
+module Data.Array.Accelerate.Math.FFT.Adhoc ( fft, ditSplitRadixLoop)
   where
 
 import Data.Array.Accelerate                                        hiding ( transpose )
