@@ -33,6 +33,7 @@ import Data.Array.Accelerate.Math.FFT.LLVM.PTX.Base
 import Data.Array.Accelerate.Math.FFT.LLVM.PTX.Plans
 
 import Data.Array.Accelerate.Analysis.Match
+import Data.Array.Accelerate.Array.Lifted
 import Data.Array.Accelerate.Array.Sugar
 import Data.Array.Accelerate.Data.Complex
 import Data.Array.Accelerate.Error

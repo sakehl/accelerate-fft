@@ -34,6 +34,9 @@ module Data.Array.Accelerate.Math.FFT (
   fft3D,
 
   Adhoc.ditSplitRadixLoop,
+#ifdef ACCELERATE_LLVM_PTX_BACKEND
+  PTX.fft2DVec,
+#endif
 
 ) where
 
