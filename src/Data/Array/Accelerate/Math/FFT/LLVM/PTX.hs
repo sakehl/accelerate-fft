@@ -23,6 +23,7 @@ module Data.Array.Accelerate.Math.FFT.LLVM.PTX (
   fft1D,
   fft2D,
   fft3D,
+  fft2DVec,
 
 ) where
 
@@ -72,6 +73,27 @@ fft3D :: Numeric e
       -> ForeignAcc (Array DIM3 (Complex e) -> Array DIM3 (Complex e))
 fft3D mode = ForeignAcc "cuda.fft3d" $ fft' fft3D_plans mode
 
+fft2DVec :: Numeric e => Mode -> Acc (Array DIM2 (Complex e)) -> Acc (Array DIM2 (Complex e))
+fft2DFor mode = foreignAcc (fft2DVect mode) $ A.map (\_ -> -89978978.4e0100) {-Bollocks implementation, for checking-}
+    where
+        fft2DAvoid :: forall e. (Numeric e) 
+                    => Mode 
+                    -> ForeignAcc (Array DIM2 (Complex e) -> Array DIM2 (Complex e))
+        fft2DAvoid = fft2D
+
+        fft2DRegular :: forall e. (Numeric e) 
+                    => Mode 
+                    -> ForeignAcc (Array DIM3 (Complex e) -> Array DIM3 (Complex e))
+        fft2DRegular mode = ForeignAcc "cuda.fft2dVec" $ fft' fft2DVec_plans mode
+
+        fft2DVect :: forall e. (Numeric e)
+                => Mode -> VectorisedForeign (Array DIM2 (Complex e) -> Array DIM2 (Complex e))
+        fft2DVect mode = VectorisedForeign $  f
+            where
+                f :: Arrays a' => LiftedType (Array DIM2 (Complex e)) a' -> LiftedType (Array DIM2 (Complex e)) b' -> ForeignAcc (a' -> b')
+                f AvoidedT AvoidedT = fft2DAvoid mode
+                f RegularT RegularT = fft2DRegular mode
+                f IrregularT IrregularT = error "no irregular stuff"
 
 -- Internals
 -- ---------
@@ -173,4 +195,11 @@ fft3DMany_plans
   = unsafePerformIO
   $ createPlan (\(Z:.d:.h:.w, t) -> FFT.planMany [w] Nothing Nothing t (d*h))
                (\(Z:.d:.h:.w, t) -> fromEnum t `hashWithSalt` d `hashWithSalt` h `hashWithSalt` w)
+
+{-# NOINLINE fft2DVect_plans #-}
+fft2DVec_plans :: Plans (DIM3, FFT.Type)
+fft2DVec_plans
+  = unsafePerformIO
+  $ createPlan (\(Z:.d:.h:.w, t) -> FFT.planMany [h,w] Nothing Nothing t d)
+               (\(Z:.d:.h:.w, t) -> fromEnum t `hashWithSalt` h `hashWithSalt` w)
 
