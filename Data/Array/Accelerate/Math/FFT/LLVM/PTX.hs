@@ -74,6 +74,21 @@ fft3D :: IsFloating e
       -> ForeignAcc (Array DIM3 (Complex e) -> (Array DIM3 (Complex e)))
 fft3D mode = ForeignAcc "fft3D" $ liftAtoC (cuFFT mode)
 
+fft1DW :: (Elt e, IsFloating e)
+      => Mode
+      -> Acc (Array DIM2 (Complex e)) -> Acc (Array DIM2 (Complex e))
+fft1DW mode = foreignAcc (fft1D mode) $ A.map (\_ -> 0)
+
+fft2DW :: (Elt e, IsFloating e)
+      => Mode
+      -> Acc (Array DIM2 (Complex e)) -> Acc (Array DIM2 (Complex e))
+fft2DW mode = foreignAcc (fft2D mode) $ A.map (\_ -> 0)
+
+fft3DW :: (Elt e, IsFloating e)
+      => Mode
+      -> Acc (Array DIM2 (Complex e)) -> Acc (Array DIM2 (Complex e))
+fft3DW mode = foreignAcc (fft3D mode) $ A.map (\_ -> 0)
+
 
 liftAtoC
     :: forall sh e. (Shape sh, IsFloating e)
