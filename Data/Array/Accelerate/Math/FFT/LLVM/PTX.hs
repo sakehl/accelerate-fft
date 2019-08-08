@@ -50,6 +50,10 @@ import Data.Maybe
 import Data.Typeable
 import System.IO.Unsafe
 
+import Data.ByteString.Short (toShort)
+import Data.ByteString.Char8 (pack)
+
+pack' = toShort . pack
 
 fft1D :: IsFloating e
       => Mode
@@ -95,11 +99,17 @@ cuFFT mode stream arr =
     p <- plan (sh :. sz `quot` 2) (undefined::e)  -- recall this is an array of packed (Vec2 e)
     FFT.setStream p st
     case floatingType :: FloatingType e of
-      TypeFloat{}   -> FFT.execC2C p d_arr d_arr (signOfMode mode) >> return arr
-      TypeDouble{}  -> FFT.execZ2Z p d_arr d_arr (signOfMode mode) >> return arr
-      TypeCFloat{}  -> FFT.execC2C p d_arr d_arr (signOfMode mode) >> return arr
-      TypeCDouble{} -> FFT.execZ2Z p d_arr d_arr (signOfMode mode) >> return arr
+      TypeFloat{}   -> FFT.execC2C p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeDouble{}  -> FFT.execZ2Z p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeCFloat{}  -> FFT.execC2C p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeCDouble{} -> FFT.execZ2Z p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
 
+convertMode :: Mode -> FFT.Mode
+convertMode m
+  = case m of
+      Forward   ->  FFT.Forward
+      Reverse   ->  FFT.Inverse
+      Inverse   ->  FFT.Inverse
 
 -- | Convert an unzipped Accelerate array of complex numbers into a (new) packed
 -- array suitable for use with CUFFT.
@@ -118,7 +128,7 @@ a2c stream arr | FloatingDict <- floatingDict (floatingType :: FloatingType e) =
   withScalarArrayPtr   cs  stream $ \d_cs      -> liftIO $ do
   withLifetime             stream $ \st        -> do
     mdl  <- twine (sizeOf (undefined::e))
-    pack <- CUDA.getFun mdl "interleave"
+    pack <- CUDA.getFun mdl (pack' "interleave")
     dev  <- CUDA.device
     prp  <- CUDA.props dev
     regs <- CUDA.requires pack CUDA.NumRegs
@@ -150,7 +160,7 @@ c2a stream cs | FloatingDict <- floatingDict (floatingType :: FloatingType e) = 
   withScalarArrayPtr   cs  stream $ \d_cs      -> liftIO $ do
   withLifetime             stream $ \st        -> do
     mdl    <- twine (sizeOf (undefined::e))
-    unpack <- CUDA.getFun mdl "deinterleave"
+    unpack <- CUDA.getFun mdl (pack' "deinterleave")
     dev    <- CUDA.device
     prp    <- CUDA.props dev
     regs   <- CUDA.requires unpack CUDA.NumRegs
