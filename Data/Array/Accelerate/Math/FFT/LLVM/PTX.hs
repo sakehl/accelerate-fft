@@ -27,7 +27,7 @@ module Data.Array.Accelerate.Math.FFT.LLVM.PTX
 -- ) where
 
 import qualified Data.Array.Accelerate                              as A
-import Data.Array.Accelerate                              as A (Acc, Elt, foreignAcc, VectorisedForeign, LiftedType(..))
+import Data.Array.Accelerate                              as A (Acc, Elt, foreignAcc, VectorisedForeign(..), LiftedType(..))
 
 import Data.Array.Accelerate.Math.FFT.Mode
 import Data.Array.Accelerate.Math.FFT.Twine
@@ -57,6 +57,8 @@ import System.IO.Unsafe
 
 import Data.ByteString.Short (toShort)
 import Data.ByteString.Char8 (pack)
+
+import Debug.Trace
 
 pack' = toShort . pack
 castDevPtr = CUDA.castDevPtr
@@ -138,10 +140,10 @@ cuFFT' plan mode stream arr =
     p <- plan (sh :. sz `quot` 2) (undefined::e)  -- recall this is an array of packed (Vec2 e)
     FFT.setStream p st
     case floatingType :: FloatingType e of
-      TypeFloat{}   -> FFT.execC2C p (signOfMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
-      TypeDouble{}  -> FFT.execZ2Z p (signOfMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
-      TypeCFloat{}  -> FFT.execC2C p (signOfMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
-      TypeCDouble{} -> FFT.execZ2Z p (signOfMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeFloat{}   -> FFT.execC2C p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeDouble{}  -> FFT.execZ2Z p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeCFloat{}  -> FFT.execC2C p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeCDouble{} -> FFT.execZ2Z p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
 
 cuFFT :: forall sh e. (Shape sh, IsFloating e)
       => Mode
