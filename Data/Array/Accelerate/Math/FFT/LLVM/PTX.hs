@@ -76,6 +76,11 @@ fft3D :: IsFloating e
       -> ForeignAcc (Array DIM3 (Complex e) -> (Array DIM3 (Complex e)))
 fft3D mode = ForeignAcc "fft3D" $ liftAtoC (cuFFT mode)
 
+fft2DVec :: IsFloating e
+      => Mode
+      -> ForeignAcc (Array DIM3 (Complex e) -> (Array DIM3 (Complex e)))
+fft2DVec mode = ForeignAcc "fft2DVec" $ liftAtoC (cuFFTmany mode)
+
 fft1DW :: (Elt e, IsFloating e, A.RealFloat e)
       => Mode
       -> Acc (Array DIM1 (Complex e)) -> Acc (Array DIM1 (Complex e))
@@ -90,6 +95,18 @@ fft3DW :: (Elt e, IsFloating e, A.RealFloat e)
       => Mode
       -> Acc (Array DIM3 (Complex e)) -> Acc (Array DIM3 (Complex e))
 fft3DW mode = foreignAcc (fft3D mode) $ A.map (\_ -> 0)
+
+fft2DForGPU :: (Elt e, IsFloating e, A.RealFloat e) => Mode -> Acc (Array DIM2 (Complex e)) -> Acc (Array DIM2 (Complex e))
+fft2DForGPU mode = foreignAcc (fft2DVect mode) $ A.map (\_ -> 0) {-Bollocks implementation, for checking-}
+    where
+        fft2DVect :: forall e . (IsFloating e, Elt e)
+                => Mode -> VectorisedForeign (Array DIM2 (Complex e) -> Array DIM2 (Complex e))
+        fft2DVect mode = VectorisedForeign $  f
+            where
+                f :: Arrays a' => LiftedType (Array DIM2 (Complex e)) a' -> LiftedType (Array DIM2 (Complex e)) b' -> ForeignAcc (a' -> b')
+                f AvoidedT AvoidedT = fft2D mode
+                f RegularT RegularT = fft2DVec mode
+                f IrregularT IrregularT = error "no irregular stuff"
 
 
 liftAtoC
@@ -108,22 +125,37 @@ liftAtoC f s =
 
 -- | Call the cuFFT library to execute the FFT (inplace)
 --
-cuFFT :: forall sh e. (Shape sh, IsFloating e)
-      => Mode
+cuFFT' :: forall sh e. (Shape sh, IsFloating e)
+      => ((sh:.Int) -> e -> IO FFT.Handle)
+      -> Mode
       -> Stream
       -> Array (sh:.Int) e
       -> LLVM PTX (Array (sh:.Int) e)
-cuFFT mode stream arr =
+cuFFT' plan mode stream arr =
   withScalarArrayPtr arr stream $ \d_arr -> liftIO $
   withLifetime           stream $ \st    -> do
     let sh :. sz = shape arr
     p <- plan (sh :. sz `quot` 2) (undefined::e)  -- recall this is an array of packed (Vec2 e)
     FFT.setStream p st
     case floatingType :: FloatingType e of
-      TypeFloat{}   -> FFT.execC2C p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
-      TypeDouble{}  -> FFT.execZ2Z p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
-      TypeCFloat{}  -> FFT.execC2C p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
-      TypeCDouble{} -> FFT.execZ2Z p (convertMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeFloat{}   -> FFT.execC2C p (signOfMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeDouble{}  -> FFT.execZ2Z p (signOfMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeCFloat{}  -> FFT.execC2C p (signOfMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+      TypeCDouble{} -> FFT.execZ2Z p (signOfMode mode) (castDevPtr d_arr) (castDevPtr d_arr)  >> return arr
+
+cuFFT :: forall sh e. (Shape sh, IsFloating e)
+      => Mode
+      -> Stream
+      -> Array (sh:.Int) e
+      -> LLVM PTX (Array (sh:.Int) e)
+cuFFT = cuFFT' plan
+
+cuFFTmany :: forall sh e. (Shape sh, IsFloating e)
+      => Mode
+      -> Stream
+      -> Array (sh:.Int:.Int) e
+      -> LLVM PTX (Array (sh:.Int:.Int) e)
+cuFFTmany = cuFFT' manyplan
 
 convertMode :: Mode -> FFT.Mode
 convertMode m
@@ -218,6 +250,24 @@ plan (shapeToList -> sh) _ =
            TypeCFloat{}  -> FFT.C2C
            TypeCDouble{} -> FFT.Z2Z
 
+manyplan :: forall sh e. (Shape sh, IsFloating e) => sh -> e -> IO FFT.Handle
+manyplan (shapeToList -> sh) _ =
+  modifyMVar fft_manyplans $ \ps ->
+    case lookup (ty, sh) ps of
+      Just p  -> return (ps, p)
+      Nothing -> do
+        p <- case sh of
+               [w,h]   -> FFT.planMany [w] Nothing Nothing ty h
+               [w,h,d] -> trace (show sh Prelude.++ " this is the shape for 2D") $ FFT.planMany [h,w] Nothing Nothing ty d
+               [w,h,d,n] -> FFT.planMany [d,h,w] Nothing Nothing ty n
+               _       -> error "cuFFT only supports 1D, 2D, and 3D transforms"
+        return (((ty,sh),p) : ps, p)
+  where
+    ty = case floatingType :: FloatingType e of
+           TypeFloat{}   -> FFT.C2C
+           TypeDouble{}  -> FFT.Z2Z
+           TypeCFloat{}  -> FFT.C2C
+           TypeCDouble{} -> FFT.Z2Z
 
 -- | Load the module to convert between SoA and AoS representation for the given
 -- type. This is cached for subsequent reuse.
@@ -292,6 +342,15 @@ type instance DevicePtrs CDouble = DevicePtr Double
 {-# NOINLINE fft_plans #-}
 fft_plans :: MVar [((FFT.Type, [Int]), FFT.Handle)]
 fft_plans = unsafePerformIO $ do
+  mv <- newMVar []
+  _  <- mkWeakMVar mv
+      $ withMVar mv
+      $ mapM_ (\(_,p) -> FFT.destroy p)
+  return mv
+
+{-# NOINLINE fft_manyplans #-}
+fft_manyplans :: MVar [((FFT.Type, [Int]), FFT.Handle)]
+fft_manyplans = unsafePerformIO $ do
   mv <- newMVar []
   _  <- mkWeakMVar mv
       $ withMVar mv
