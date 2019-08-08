@@ -54,6 +54,7 @@ import Data.ByteString.Short (toShort)
 import Data.ByteString.Char8 (pack)
 
 pack' = toShort . pack
+castDevPtr = CUDA.castDevPtr
 
 fft1D :: IsFloating e
       => Mode
