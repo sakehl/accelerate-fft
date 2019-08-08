@@ -27,7 +27,7 @@ module Data.Array.Accelerate.Math.FFT.LLVM.PTX
 -- ) where
 
 import qualified Data.Array.Accelerate                              as A
-import Data.Array.Accelerate                              as A (Acc, Elt)
+import Data.Array.Accelerate                              as A (Acc, Elt, foreignAcc)
 
 import Data.Array.Accelerate.Math.FFT.Mode
 import Data.Array.Accelerate.Math.FFT.Twine
