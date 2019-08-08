@@ -95,7 +95,7 @@ Library
       , cufft                   >= 0.1.2
       , file-embed              >= 0.0.10
 
-    other-modules:
+    exposed-modules:
       Data.Array.Accelerate.Math.FFT.LLVM.PTX
 
   -- Don't add the extensions list here. Instead, place individual LANGUAGE

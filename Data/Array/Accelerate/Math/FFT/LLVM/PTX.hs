@@ -16,13 +16,16 @@
 -- Portability : non-portable (GHC extensions)
 --
 
-module Data.Array.Accelerate.Math.FFT.LLVM.PTX (
+module Data.Array.Accelerate.Math.FFT.LLVM.PTX 
+  where
+-- (
 
-  fft1D,
-  fft2D,
-  fft3D,
+--   fft1D,
+--   fft2D,
+--   fft3D,
 
-) where
+-- ) where
+
 
 import Data.Array.Accelerate.Math.FFT.Mode
 import Data.Array.Accelerate.Math.FFT.Twine
