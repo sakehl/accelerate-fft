@@ -83,7 +83,7 @@ Library
       , fft                     >= 0.1.8
       , storable-complex        >= 0.2
 
-    other-modules:
+    exposed-modules:
       Data.Array.Accelerate.Math.FFT.LLVM.Native
 
   if flag(llvm-ptx)

@@ -20,6 +20,10 @@ module Data.Array.Accelerate.Math.FFT.LLVM.Native (
   fft1D,
   fft2D,
   fft3D,
+  fft1DFor,
+  fft2DFor,
+  fft1DVect,
+  fft2DVect,
 
 ) where
 
@@ -95,6 +99,55 @@ fft3D mode
     go :: FFTWReal r => CArray (Int,Int,Int) (Complex r) -> CArray (Int,Int,Int) (Complex r)
     go = FFT.dftGU (signOf mode) flags [0,1,2]
 
+fft2DFor :: (A.RealFloat e, Elt e, IsFloating e) => Mode -> Acc (Array DIM2 (Complex e)) -> Acc (Array DIM2 (Complex e))
+fft2DFor mode = foreignAcc (fft2DVect mode) $ A.map (\x -> x*0) {-Bollocks implementation, for checking-}
+
+fft2DRegular :: forall e. (Elt e, IsFloating e) 
+            => Mode 
+            -> ForeignAcc (Array DIM3 (Complex e) -> Array DIM3 (Complex e))
+fft2DRegular mode = ForeignAcc (nameOfV mode (undefined::DIM2))
+    $ case floatingType :: FloatingType e of
+        TypeFloat{}   -> liftIO . liftAtoC go
+        TypeDouble{}  -> liftIO . liftAtoC go
+        TypeCFloat{}  -> liftIO . liftAtoC go
+        TypeCDouble{} -> liftIO . liftAtoC go
+    where
+        go :: (P.Show r, FFTWReal r) => CArray (Int,Int,Int) (Complex r) -> CArray (Int,Int,Int) (Complex r)
+        go = FFT.dftGU (signOf mode) flags [1,2]
+
+fft2DVect :: forall e. ((Elt e, IsFloating e))
+        => Mode -> VectorisedForeign (Array DIM2 (Complex e) -> Array DIM2 (Complex e))
+fft2DVect mode = VectorisedForeign $  f
+    where
+        f :: Arrays a' => LiftedType (Array DIM2 (Complex e)) a' -> LiftedType (Array DIM2 (Complex e)) b' -> ForeignAcc (a' -> b')
+        f AvoidedT AvoidedT = fft2D mode
+        f RegularT RegularT = fft2DRegular mode
+        f IrregularT IrregularT = error "no irregular stuff"
+
+fft1DFor :: (A.RealFloat e, Elt e, IsFloating e) => Mode -> Acc (Array DIM1 (Complex e)) -> Acc (Array DIM1 (Complex e))
+fft1DFor mode = foreignAcc (fft1DVect mode) $ A.map (\x -> x*0) {-Bollocks implementation, for checking-}
+
+fft1DRegular :: forall e. (Elt e, IsFloating e)
+            => Mode 
+            -> ForeignAcc (Array DIM2 (Complex e) -> Array DIM2 (Complex e))
+fft1DRegular mode = ForeignAcc (nameOfV mode (undefined::DIM1))
+    $ case floatingType :: FloatingType e of
+        TypeFloat{}   -> liftIO . liftAtoC go
+        TypeDouble{}  -> liftIO . liftAtoC go
+        TypeCFloat{}  -> liftIO . liftAtoC go
+        TypeCDouble{} -> liftIO . liftAtoC go
+    where
+        go :: (P.Show r, FFTWReal r) => CArray (Int,Int) (Complex r) -> CArray (Int,Int) (Complex r)
+        go = FFT.dftGU (signOf mode) flags [1]
+
+fft1DVect :: forall e. (Elt e, IsFloating e)
+        => Mode -> VectorisedForeign (Array DIM1 (Complex e) -> Array DIM1 (Complex e))
+fft1DVect mode = VectorisedForeign $  f
+    where
+        f :: Arrays a' => LiftedType (Array DIM1 (Complex e)) a' -> LiftedType (Array DIM1 (Complex e)) b' -> ForeignAcc (a' -> b')
+        f AvoidedT AvoidedT = fft1D mode
+        f RegularT RegularT = fft1DRegular mode
+        f IrregularT IrregularT = error "no irregular stuff"
 
 signOf :: Mode -> Sign
 signOf Forward = DFTForward
@@ -106,6 +159,10 @@ flags = measure .|. destroyInput
 nameOf :: forall sh. Shape sh => Mode -> sh -> String
 nameOf Forward _ = printf "FFTW.dft%dD"  (rank (undefined::sh))
 nameOf _       _ = printf "FFTW.idft%dD" (rank (undefined::sh))
+
+nameOfV :: forall sh. Shape sh => Mode -> sh -> String
+nameOfV Forward _ = printf "FFTW.dft%dDVec"  (rank (undefined::sh))
+nameOfV _       _ = printf "FFTW.idft%dDVec" (rank (undefined::sh))
 
 
 -- | Lift an operation on CArray into an operation on Accelerate arrays

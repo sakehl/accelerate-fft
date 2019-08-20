@@ -17,14 +17,14 @@
 --
 
 module Data.Array.Accelerate.Math.FFT.LLVM.PTX 
-  where
--- (
+(
+  fft1D,
+  fft2D,
+  fft3D,
+  fft2DFor,
+  fft2DVect,
 
---   fft1D,
---   fft2D,
---   fft3D,
-
--- ) where
+) where
 
 import qualified Data.Array.Accelerate                              as A
 import Data.Array.Accelerate                              as A (Acc, Elt, foreignAcc, VectorisedForeign(..), LiftedType(..))
@@ -78,37 +78,22 @@ fft3D :: IsFloating e
       -> ForeignAcc (Array DIM3 (Complex e) -> (Array DIM3 (Complex e)))
 fft3D mode = ForeignAcc "fft3D" $ liftAtoC (cuFFT mode)
 
-fft2DVec :: IsFloating e
+fft2DRegular :: IsFloating e
       => Mode
       -> ForeignAcc (Array DIM3 (Complex e) -> (Array DIM3 (Complex e)))
-fft2DVec mode = ForeignAcc "fft2DVec" $ liftAtoC (cuFFTmany mode)
+fft2DRegular mode = ForeignAcc "fft2DRegular" $ liftAtoC (cuFFTmany mode)
 
-fft1DW :: (Elt e, IsFloating e, A.RealFloat e)
-      => Mode
-      -> Acc (Array DIM1 (Complex e)) -> Acc (Array DIM1 (Complex e))
-fft1DW mode = foreignAcc (fft1D mode) $ A.map (\_ -> 0)
+fft2DFor :: (Elt e, IsFloating e, A.RealFloat e) => Mode -> Acc (Array DIM2 (Complex e)) -> Acc (Array DIM2 (Complex e))
+fft2DFor mode = foreignAcc (fft2DVect mode) $ A.map (\x -> x*0) {-Bollocks implementation, for checking-}
 
-fft2DW :: (Elt e, IsFloating e, A.RealFloat e)
-      => Mode
-      -> Acc (Array DIM2 (Complex e)) -> Acc (Array DIM2 (Complex e))
-fft2DW mode = foreignAcc (fft2D mode) $ A.map (\_ -> 0)
-
-fft3DW :: (Elt e, IsFloating e, A.RealFloat e)
-      => Mode
-      -> Acc (Array DIM3 (Complex e)) -> Acc (Array DIM3 (Complex e))
-fft3DW mode = foreignAcc (fft3D mode) $ A.map (\_ -> 0)
-
-fft2DForGPU :: (Elt e, IsFloating e, A.RealFloat e) => Mode -> Acc (Array DIM2 (Complex e)) -> Acc (Array DIM2 (Complex e))
-fft2DForGPU mode = foreignAcc (fft2DVect mode) $ A.map (\_ -> 0) {-Bollocks implementation, for checking-}
+fft2DVect :: forall e . (IsFloating e, Elt e)
+          => Mode -> VectorisedForeign (Array DIM2 (Complex e) -> Array DIM2 (Complex e))
+fft2DVect mode = VectorisedForeign $  f
     where
-        fft2DVect :: forall e . (IsFloating e, Elt e)
-                => Mode -> VectorisedForeign (Array DIM2 (Complex e) -> Array DIM2 (Complex e))
-        fft2DVect mode = VectorisedForeign $  f
-            where
-                f :: Arrays a' => LiftedType (Array DIM2 (Complex e)) a' -> LiftedType (Array DIM2 (Complex e)) b' -> ForeignAcc (a' -> b')
-                f AvoidedT AvoidedT = fft2D mode
-                f RegularT RegularT = fft2DVec mode
-                f IrregularT IrregularT = error "no irregular stuff"
+        f :: Arrays a' => LiftedType (Array DIM2 (Complex e)) a' -> LiftedType (Array DIM2 (Complex e)) b' -> ForeignAcc (a' -> b')
+        f AvoidedT AvoidedT = fft2D mode
+        f RegularT RegularT = fft2DRegular mode
+        f IrregularT IrregularT = error "no irregular stuff"
 
 
 liftAtoC

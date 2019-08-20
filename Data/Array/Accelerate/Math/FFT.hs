@@ -39,7 +39,8 @@ module Data.Array.Accelerate.Math.FFT (
   fft1D, fft1D',
   fft2D, fft2D',
   fft3D, fft3D',
-  fft
+  fft,
+  fft2DFor,
 
 ) where
 
@@ -271,6 +272,27 @@ fft sign sh sz arr
           in
           lift ( cos k :+ A.constant sign * sin k )
 
+---------------------------------------
+-- Vectorized foreign version. Doesn't have a fallback version (saves compile time), so make sure you use it with one of the backends.
+--
+fft2DFor :: forall e. FFTElt e
+       => Mode
+       -> Acc (Array DIM2 (Complex e))
+       -> Acc (Array DIM2 (Complex e))
+fft2DFor mode arr
+  = let scale   = A.fromIntegral (A.size arr)
+        go      =
+#ifdef ACCELERATE_LLVM_NATIVE_BACKEND
+                  foreignAcc (Native.fft2DVect mode) $
+#endif
+#ifdef ACCELERATE_LLVM_PTX_BACKEND
+                  foreignAcc (PTX.fft2DVect mode) $
+#endif
+                  A.map (\x -> x*0) {-Bollocks implementation, for checking-}
+    in
+    case mode of
+      Inverse -> A.map (/scale) (go arr)
+      _       -> go arr
 
 -- Append two arrays. This is a specialised version of (A.++) which does not do
 -- bounds checking or intersection.
