@@ -23,6 +23,7 @@ module Data.Array.Accelerate.Math.DFT.Centre (
 
   centre1D, centre2D, centre3D,
   shift1D,  shift2D,  shift3D,
+  ishift1D,  ishift2D,  ishift3D,
 
 ) where
 
