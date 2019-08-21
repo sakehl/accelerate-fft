@@ -23,6 +23,7 @@ module Data.Array.Accelerate.Math.FFT.LLVM.PTX
   fft3D,
   fft2DFor,
   fft2DVect,
+  fft2DRegular,
 
 ) where
 

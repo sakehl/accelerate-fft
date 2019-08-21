@@ -24,6 +24,7 @@ module Data.Array.Accelerate.Math.FFT.LLVM.Native (
   fft2DFor,
   fft1DVect,
   fft2DVect,
+  fft2DRegular,
 
 ) where
 

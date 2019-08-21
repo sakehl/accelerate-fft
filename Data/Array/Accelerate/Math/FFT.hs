@@ -40,7 +40,7 @@ module Data.Array.Accelerate.Math.FFT (
   fft2D, fft2D',
   fft3D, fft3D',
   fft,
-  fft2DFor,
+  fft2DFor, fft2DRegular
 
 ) where
 
@@ -273,7 +273,8 @@ fft sign sh sz arr
           lift ( cos k :+ A.constant sign * sin k )
 
 ---------------------------------------
--- Vectorized foreign version. Doesn't have a fallback version (saves compile time), so make sure you use it with one of the backends.
+-- Vectorized foreign version. Doesn't have a fallback version (saves compile time),
+-- so make sure you use it with one of the backends.
 --
 fft2DFor :: forall e. FFTElt e
        => Mode
@@ -287,6 +288,30 @@ fft2DFor mode arr
 #endif
 #ifdef ACCELERATE_LLVM_PTX_BACKEND
                   foreignAcc (PTX.fft2DVect mode) $
+#endif
+                  A.map (\x -> x*0) {-Bollocks implementation, for checking-}
+    in
+    case mode of
+      Inverse -> A.map (/scale) (go arr)
+      _       -> go arr
+
+
+---------------------------------------
+-- Self lifted regular foreign version. Doesn't have a fallback version (saves compile
+-- time), so make sure you use it with one of the backends.
+--
+fft2DRegular :: forall e. FFTElt e
+       => Mode
+       -> Acc (Array DIM3 (Complex e))
+       -> Acc (Array DIM3 (Complex e))
+fft2DRegular mode arr
+  = let scale   = A.fromIntegral (A.shapeSize . A.indexTail . A.indexTrans . A.shape $ arr)
+        go      =
+#ifdef ACCELERATE_LLVM_NATIVE_BACKEND
+                  foreignAcc (Native.fft2DRegular mode) $
+#endif
+#ifdef ACCELERATE_LLVM_PTX_BACKEND
+                  foreignAcc (PTX.fft2DRegular mode) $
 #endif
                   A.map (\x -> x*0) {-Bollocks implementation, for checking-}
     in
