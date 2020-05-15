@@ -246,7 +246,7 @@ manyplan (shapeToList -> sh) _ =
       Nothing -> do
         p <- case sh of
                [w,h]   -> FFT.planMany [w] Nothing Nothing ty h
-               [w,h,d] -> trace (show sh Prelude.++ " this is the shape for 2D") $ FFT.planMany [h,w] Nothing Nothing ty d
+               [w,h,d] -> FFT.planMany [h,w] Nothing Nothing ty d
                [w,h,d,n] -> FFT.planMany [d,h,w] Nothing Nothing ty n
                _       -> error "cuFFT only supports 1D, 2D, and 3D transforms"
         return (((ty,sh),p) : ps, p)
